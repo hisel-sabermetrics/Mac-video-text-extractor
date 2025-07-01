@@ -50,9 +50,6 @@ def extract_txt(
 
     frame_matrix: NDArray = cast_to_ndarray.reshape([height, width, 3])
 
-    if cast_to_ndarray.size != height * width * 3:
-        print(frame_matrix.shape)
-
     img: Image = fromarray(frame_matrix)
 
     txt_list: list[tuple(str, float, list(float))] = ocrmac.OCR(
