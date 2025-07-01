@@ -81,9 +81,10 @@ def pretty(txt_joined: str) -> str:
 
 def seg_from_scene(video_path_escaped: str, scene: float) -> str:
     return run(
-        "ffmpeg -i "
-        + video_path_escaped
-        + f" -filter:v \"select='gt(scene,{scene})',showinfo\" -f null -",
+        "ffmpeg -i " + video_path_escaped + " -filter:v "
+        '"hue=s=0,'  # Turn greyscale
+        "maskfun=low=230:high=230:fill=0:sum=255,"  # Mask
+        f"select='gt(scene,{scene})',showinfo\" -f null -",
         stdout=DEVNULL,
         stderr=PIPE,
         text=True,
