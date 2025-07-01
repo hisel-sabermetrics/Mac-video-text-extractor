@@ -33,7 +33,14 @@ def sec2str_time(sec: float) -> str:
 
 
 def extract_txt(
-    start_sec: float, video_path_escaped: str, width: int, height: int
+    start_sec: float,
+    video_path_escaped: str,
+    width: int,
+    height: int,
+    start_x: int,
+    start_y: int,
+    end_x: int,
+    end_y: int,
 ) -> str:
     out: str = run(
         f"ffmpeg -ss "
@@ -47,10 +54,8 @@ def extract_txt(
     ).stdout
 
     cast_to_ndarray: NDArray = frombuffer(out, uint8)
-
     frame_matrix: NDArray = cast_to_ndarray.reshape([height, width, 3])
-
-    img: Image = fromarray(frame_matrix)
+    img: Image = fromarray(frame_matrix[start_x:end_x, start_y:end_y, :])
 
     txt_list: list[tuple(str, float, list(float))] = ocrmac.OCR(
         img
@@ -76,10 +81,11 @@ def pretty(txt_joined: str) -> str:
     return txt_joined
 
 
-def seg_from_scene(video_path_escaped: str, scene: float) -> str:
+def seg_from_scene(video_path_escaped: str, scene: float, crop: str) -> str:
     return run(
         "ffmpeg -i " + video_path_escaped + " -filter:v "
-        '"hue=s=0,'  # Turn greyscale
+        f'"crop={crop},'
+        "hue=s=0,"  # Turn greyscale
         "maskfun=low=230:high=230:fill=0:sum=255,"  # Mask
         f"select='gt(scene,{scene})',showinfo\" -f null -",
         stdout=DEVNULL,
@@ -89,11 +95,11 @@ def seg_from_scene(video_path_escaped: str, scene: float) -> str:
     ).stderr
 
 
-def seg_from_key(video_path_escaped: str) -> str:
+def seg_from_key(video_path_escaped: str, crop) -> str:
     return run(
         "ffmpeg -i " + video_path_escaped
         # + " -filter:v \"select='eq(key,1)',showinfo\" -f null -",
-        + ' -filter:v "showinfo" -f null -',
+        + ' -filter:v "' f"crop={crop},showinfo" '" -f null -',
         stdout=DEVNULL,
         stderr=PIPE,
         text=True,
@@ -107,6 +113,7 @@ def video2vtt(
     replace: str = "",
     scene: float = 0.02,
     lyrics_file: BinaryIO | None = None,
+    crop: str = "in_w:in_h:0:0",
 ) -> None:
     use_ltrics: bool = lyrics_file is not None
     if use_ltrics:
@@ -140,10 +147,10 @@ def video2vtt(
     num_seg = inf
     while True:
         if scene != 0:
-            seg_change: str = seg_from_scene(video_path_escaped, scene)
+            seg_change: str = seg_from_scene(video_path_escaped, scene, crop)
         else:
             scene = 0
-            seg_change: str = seg_from_key(video_path_escaped)
+            seg_change: str = seg_from_key(video_path_escaped, crop)
 
         time_start: list[str] = [
             t for t in findall(r"(?<=pts_time:)[0-9\.]++", seg_change)
@@ -158,6 +165,27 @@ def video2vtt(
 
     width: int = video_meta["width"]
     height: int = video_meta["height"]
+    crop_param: list[int] = [
+        int(
+            eval(
+                sub(r"^out_[hw]=", "", param),
+                {
+                    "in_h": height,
+                    "in_w": width,
+                },
+            )
+        )
+        for param in split(":", crop)
+    ]
+    start_x: int = 0 if len(crop_param) <= 2 else int(crop_param[2])
+    start_y: int = 0 if len(crop_param) <= 3 else int(crop_param[3])
+    end_x: int = int(crop_param[0]) + start_x
+    end_y: int = (
+        int(crop_param[0]) + start_y
+        if len(crop_param) == 1
+        else int(crop_param[1]) + start_y
+    )
+
     print(f"Number of scene found: {num_seg}")
 
     cue_list: list[list[float, float, str]] = []
@@ -165,7 +193,14 @@ def video2vtt(
     with tqdm(total=num_seg) as pbar:
         # screenshot_path = f"{dir_temp}/screenshot.png"
         this_cue: str = extract_txt(
-            time_start[0], video_path_escaped, width, height
+            time_start[0],
+            video_path_escaped,
+            width,
+            height,
+            start_x,
+            start_y,
+            end_x,
+            end_y,
         )
         if remove != "":
             this_cue = sub(remove, replace, this_cue)
@@ -181,7 +216,16 @@ def video2vtt(
         ]
         pbar.update()
         for start, end in zip(time_start, time_end):
-            this_cue = extract_txt(start, video_path_escaped, width, height)
+            this_cue = extract_txt(
+                start,
+                video_path_escaped,
+                width,
+                height,
+                start_x,
+                start_y,
+                end_x,
+                end_y,
+            )
             if remove != "":
                 this_cue = sub(remove, replace, this_cue)
             if this_cue == "":
@@ -222,6 +266,7 @@ if __name__ == "__main__":
         "--lyrics", nargs="*", type=FileType("r"), default=None
     )
     parser.add_argument("--min-change", nargs="?", type=float, default=0.02)
+    parser.add_argument("--crop", nargs="?", type=str, default="in_w:in_h:0:0")
     args = parser.parse_args()
     if len(args.pattern) == 1:
         args.pattern = [args.pattern[0], ""]
@@ -237,4 +282,5 @@ if __name__ == "__main__":
             args.pattern[1],
             args.min_change,
             lyrics_path,
+            args.crop,
         )
