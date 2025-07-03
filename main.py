@@ -289,10 +289,10 @@ if __name__ == "__main__":
             lyrics_set[i] = args.lyrics[i]
     for file_path, lyrics_path in zip(args.path, lyrics_set):
         video2vtt(
-            file_path,
-            args.pattern[0],
-            args.pattern[1],
-            args.min_change,
-            lyrics_path,
-            args.crop,
+            video_path=file_path,
+            remove=args.pattern[0],
+            replace=args.pattern[1],
+            scene=args.min_change,
+            lyrics_file=lyrics_path,
+            crop=args.crop,
         )
