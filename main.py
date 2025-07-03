@@ -108,6 +108,32 @@ def seg_from_key(video_path_escaped: str, crop) -> str:
     ).stderr
 
 
+def write_to_file(video_path: str, cue_list: list[float, float, str]) -> None:
+    file_vtt: str = "WEBVTT\n\n" + "\n\n".join(
+        "{0} --> {1}\n{2}".format(
+            sec2str_time(cue[0]), sec2str_time(cue[1]), cue[2]
+        )
+        for cue in cue_list
+    )
+    try:
+        open(
+            video_path := path.expanduser(
+                sub(r"^.+?\.", "ttv.", video_path[::-1])[::-1]
+            ),
+            "x",
+        ).write(file_vtt)
+    except FileExistsError:
+        video_path: str = video_path[:-4]
+        for i in count(start=2):
+            try:
+                open(
+                    video_path := video_path + f"-{i}.vtt",
+                    "x",
+                ).write(file_vtt)
+            finally:
+                return
+
+
 def video2vtt(
     video_path: str,
     remove: str = "",
@@ -211,7 +237,7 @@ def video2vtt(
                 pbar.update()
                 continue
             if first_cuenot__entered:
-                cue_list = [
+                cue_list: list[float, float, str] = [
                     [
                         float(start),
                         float(end),
@@ -236,30 +262,7 @@ def video2vtt(
             cue_list.append([float(start), float(end), this_cue])
             pbar.update()
 
-    file_vtt = "WEBVTT\n\n" + "\n\n".join(
-        "{0} --> {1}\n{2}".format(
-            sec2str_time(cue[0]), sec2str_time(cue[1]), cue[2]
-        )
-        for cue in cue_list
-    )
-
-    try:
-        open(
-            path.expanduser(sub(r"^.+?\.", "ttv.", video_path[::-1])[::-1]),
-            "x",
-        ).write(file_vtt)
-    except FileExistsError:
-        for i in count(start=2):
-            try:
-                open(
-                    path.expanduser(
-                        sub(r"^.+?\.", f"ttv.{i}-", video_path[::-1])[::-1]
-                    ),
-                    "x",
-                ).write(file_vtt)
-            finally:
-                return
-
+    write_to_file(video_path, cue_list)
     # system(f"rm -rf {dir_temp} >/dev/null 2>&1")
 
 
