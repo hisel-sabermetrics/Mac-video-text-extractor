@@ -191,33 +191,9 @@ def video2vtt(
 
     print(f"Number of scene found: {num_seg}")
 
-    cue_list: list[list[float, float, str]] = []
-
     with tqdm(total=num_seg) as pbar:
         # screenshot_path = f"{dir_temp}/screenshot.png"
-        this_cue: str = extract_txt(
-            time_start[0],
-            video_path_escaped,
-            width,
-            height,
-            start_x,
-            start_y,
-            end_x,
-            end_y,
-        )
-        if remove != "":
-            this_cue = sub(remove, replace, this_cue)
-        if use_ltrics:
-            this_cue = get_close_matches(this_cue, lyrics_list, 1, 0)[0]
-        cue_list: list[list[float, float, str]] = [
-            [
-                float(time_start.pop(0)),
-                float(time_end.pop(0)),
-                # pretty(this_cue),
-                this_cue,
-            ],
-        ]
-        pbar.update()
+        first_cuenot__entered: bool = True
         for start, end in zip(time_start, time_end):
             this_cue = extract_txt(
                 start,
@@ -233,6 +209,17 @@ def video2vtt(
                 this_cue = sub(remove, replace, this_cue)
             if this_cue == "":
                 pbar.update()
+                continue
+            if first_cuenot__entered:
+                cue_list = [
+                    [
+                        float(start),
+                        float(end),
+                        lyrics_list[0] if use_ltrics else this_cue,
+                    ],
+                ]
+                pbar.update()
+                first_cuenot__entered = False
                 continue
             if use_ltrics:
                 cue_to_check: set[str, str] = lyrics_list[
