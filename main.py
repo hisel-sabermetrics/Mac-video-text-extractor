@@ -4,6 +4,7 @@ Date: 19 Jun 2025
 
 from argparse import ArgumentParser, FileType
 from difflib import get_close_matches
+from itertools import count
 from math import inf
 from os import path, system
 from re import escape, findall, search, split, sub
@@ -17,7 +18,6 @@ from ocrmac import ocrmac
 from PIL import Image
 from PIL.Image import fromarray
 from tqdm import tqdm
-from itertools import count
 
 
 def escape_path(raw_path: str) -> str:
@@ -252,11 +252,13 @@ def video2vtt(
         for i in count(start=2):
             try:
                 open(
-                    path.expanduser(sub(r"^.+?\.", f"ttv.{i}-", video_path[::-1])[::-1]),
+                    path.expanduser(
+                        sub(r"^.+?\.", f"ttv.{i}-", video_path[::-1])[::-1]
+                    ),
                     "x",
                 ).write(file_vtt)
-            return
-
+            finally:
+                return
 
     # system(f"rm -rf {dir_temp} >/dev/null 2>&1")
 
