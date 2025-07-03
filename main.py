@@ -3,6 +3,7 @@ Date: 19 Jun 2025
 """
 
 from argparse import ArgumentParser, FileType
+from atexit import register
 from difflib import get_close_matches
 from itertools import count
 from math import inf
@@ -246,6 +247,7 @@ def video2vtt(
                         lyrics_list[0] if use_ltrics else this_cue,
                     ],
                 ]
+                register(write_to_file, video_path, cue_list)
                 pbar.update()
                 first_cuenot__entered = False
                 continue
