@@ -74,8 +74,8 @@ def pretty(txt_joined: str) -> str:
         [r"(\s+-\s+)|(?m:\s*-$)", "\u2014"],  # Dash to em dash
         [r"(?<=\w)'((?=s\b)|\b)", "\u2019"],  # Right apostrophe
         [r"((?m:^)|((?<=\s)))'(?=\w)", "\u2018"],  # Left apostrophe
-        [r"(?<=\w)'((?=s\b)|\b)", "\u201d"],  # Right double quote
-        [r"((?m:^)|((?<=\s)))'(?=\w)", "\u201c"],  # Left double quote
+        [r'(?<=\w)"\b', "\u201d"],  # Right double quote
+        [r'\b"(?=\w)', "\u201c"],  # Left double quote
     ]
     for replacing in replacement_list:
         txt_joined: str = sub(replacing[0], replacing[1], txt_joined)
