@@ -56,7 +56,7 @@ def extract_txt(
 
     cast_to_ndarray: NDArray = frombuffer(out, uint8)
     frame_matrix: NDArray = cast_to_ndarray.reshape([height, width, 3])
-    img: Image = fromarray(frame_matrix[start_x:end_x, start_y:end_y, :])
+    img: Image = fromarray(frame_matrix[start_y:end_y, start_x:end_x, :])
 
     txt_list: list[tuple(str, float, list(float))] = ocrmac.OCR(
         img
