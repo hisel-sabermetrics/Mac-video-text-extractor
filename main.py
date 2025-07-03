@@ -43,6 +43,7 @@ def extract_txt(
     start_y: int,
     end_x: int,
     end_y: int,
+    lang: list[str] | None = None,
 ) -> str:
     out: str = run(
         f"ffmpeg -ss "
@@ -60,7 +61,7 @@ def extract_txt(
     img: Image = fromarray(frame_matrix[start_y:end_y, start_x:end_x, :])
 
     txt_list: list[tuple(str, float, list(float))] = ocrmac.OCR(
-        img
+        img, language_preference=lang
     ).recognize()
 
     if txt_list is False:
@@ -144,6 +145,7 @@ def video2vtt(
     scene: float = 0.02,
     lyrics_file: BinaryIO | None = None,
     crop: str = "in_w:in_h:0:0",
+    lang: list[str] | None = None,
 ) -> None:
     use_ltrics: bool = lyrics_file is not None
     if use_ltrics:
@@ -233,6 +235,7 @@ def video2vtt(
                 start_y,
                 end_x,
                 end_y,
+                lang,
             )
             if remove != "":
                 this_cue = sub(remove, replace, this_cue)
@@ -279,9 +282,12 @@ if __name__ == "__main__":
     )
     parser.add_argument("--min-change", nargs="?", type=float, default=0.02)
     parser.add_argument("--crop", nargs="?", type=str, default="in_w:in_h:0:0")
+    parser.add_argument("--lang", nargs="*", type=str, default=[None])
     args = parser.parse_args()
     if len(args.pattern) == 1:
         args.pattern = [args.pattern[0], ""]
+    if args.lang == ["None"]:
+        args.lang = None
 
     lyrics_set: list[BinaryIO | None] = [None] * len(args.path)
     if args.lyrics is not None:
@@ -295,4 +301,5 @@ if __name__ == "__main__":
             scene=args.min_change,
             lyrics_file=lyrics_path,
             crop=args.crop,
+            lang=args.lang,
         )
