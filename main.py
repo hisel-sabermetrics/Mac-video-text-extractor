@@ -131,7 +131,9 @@ def write_to_file(video_path: str, cue_list: list[float, float, str]) -> None:
                     "x",
                 ).write(file_vtt)
             finally:
-                return
+                break
+    finally:
+        print("Saved to " + sub(r"\\(?!\\)", "", video_path))
 
 
 def video2vtt(
