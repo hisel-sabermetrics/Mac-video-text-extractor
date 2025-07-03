@@ -118,7 +118,9 @@ def video2vtt(
 ) -> None:
     use_ltrics: bool = lyrics_file is not None
     if use_ltrics:
-        lyrics_list: set[str] = set(split("\n{2,}", lyrics_file.read()))
+        lyrics_list: list[str] = [
+            cue.strip() for cue in split("\n{2,}", lyrics_file.read())
+        ]
         lyrics_file.close()
     # root: str = sub(r"^.+?\/(?!\/)", "", path.realpath(__file__)[::-1])[::-1]
     # dir_temp = f"{root}/temp"
@@ -233,7 +235,10 @@ def video2vtt(
                 pbar.update()
                 continue
             if use_ltrics:
-                this_cue = get_close_matches(this_cue, lyrics_list, 1, 0)[0]
+                cue_to_check: set[str, str] = lyrics_list[
+                    0 : len(cue_list) + 1
+                ]
+                this_cue = get_close_matches(this_cue, cue_to_check, 1, 0)[0]
             if this_cue == cue_list[-1][2]:
                 cue_list[-1][1] = float(end)
                 pbar.update()
