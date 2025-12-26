@@ -4,16 +4,17 @@ Date: 19 Jun 2025
 
 from argparse import ArgumentParser, FileType
 from atexit import register
+from collections.abc import Iterable
 from difflib import get_close_matches
 from itertools import count
 from math import inf
 from os import path, system
 from re import escape, findall, search, split, sub
 from subprocess import DEVNULL, PIPE, run
-from typing import BinaryIO
+from typing import BinaryIO, Tuple
 
 from ffmpeg import input
-from numpy import finfo, float32, frombuffer, uint8
+from numpy import append, array, frombuffer, object_, uint8, where
 from numpy.typing import NDArray
 from ocrmac import ocrmac
 from PIL import Image
@@ -112,7 +113,9 @@ def seg_from_key(video_path_escaped: str, crop) -> str:
     ).stderr
 
 
-def write_to_file(video_path: str, cue_list: list[float, float, str]) -> None:
+def write_to_file(
+    video_path: str, cue_list: Iterable[Iterable[float, float, str]]
+) -> None:
     # Check if write is allowed
     if not _WRITE_TO_FILE:
         return
@@ -149,6 +152,8 @@ def video2vtt(
     replace: str = "",
     scene: float = 0.02,
     lyrics_file: BinaryIO | None = None,
+    sub_from_prev: float = 0,
+    min_to_sub: float = 0,
     crop: str = "in_w:in_h:0:0",
     lang: list[str] | None = None,
     write_file: bool = True,
@@ -273,11 +278,23 @@ def video2vtt(
                 cue_list[-1][1] = float(end)
                 pbar.update()
                 continue
-            if cue_list[-1][1] - cue_list[-1][0] > 0.15:
-                cue_list[-1][1] -= 0.1
             # cue_list.append([float(start), float(end), pretty(this_cue)])
             cue_list.append([float(start), float(end), this_cue])
             pbar.update()
+
+    # Subtract from cue if it is set
+    if sub_from_prev != 0:
+        # Cast to ndarray
+        cue_list: NDArray[Tuple[int, 3], object_] = array(cue_list)
+        start_time: NDArray[Tuple[int], float] = cue_list[:, 0].astype(float)
+        end_time: NDArray[Tuple[int], float] = cue_list[:, 1].astype(float)
+        end_time = where(
+            (end_time == append(start_time[1:], 0))
+            & (end_time - start_time >= min_to_sub),
+            end_time - sub_from_prev,
+            end_time,
+        )
+        cue_list = tuple(zip(start_time, end_time, cue_list[:, 2]))
 
     # Write to file
     if write_file:
@@ -297,6 +314,12 @@ if __name__ == "__main__":
     parser.add_argument("--min-change", nargs="?", type=float, default=0.02)
     parser.add_argument("--crop", nargs="?", type=str, default="in_w:in_h:0:0")
     parser.add_argument("--lang", nargs="*", type=str, default=[None])
+    parser.add_argument(
+        "--subtract-from-pre", nargs="?", type=float, default=0
+    )
+    parser.add_argument(
+        "--min-seg-len-for-subtract", nargs="?", type=float, default=0
+    )
     args = parser.parse_args()
     if len(args.pattern) == 1:
         args.pattern = [args.pattern[0], ""]
@@ -314,6 +337,8 @@ if __name__ == "__main__":
             replace=args.pattern[1],
             scene=args.min_change,
             lyrics_file=lyrics_path,
+            sub_from_prev=args.subtract_from_pre,
+            min_to_sub=args.min_seg_len_for_subtract,
             crop=args.crop,
             lang=args.lang,
         )
