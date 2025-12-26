@@ -80,7 +80,7 @@ def extract_txt(
 ) -> str:
     img: Image = video_to_frames(
         video_path_escaped,
-        float(start_sec),
+        start_sec,
         height,
         width,
         1,
@@ -224,10 +224,10 @@ def video2vtt(
             scene = 0
             seg_change: str = seg_from_key(video_path_escaped, crop)
 
-        time_start: list[str] = [
-            t for t in findall(r"(?<=pts_time:)[0-9\.]++", seg_change)
+        time_start: list[float, ...] = [
+            float(t) for t in findall(r"(?<=pts_time:)[0-9\.]++", seg_change)
         ]
-        time_end: list[str] = time_start[1:]
+        time_end: list[float, ...] = time_start[1:]
         time_start.pop()
         num_seg: int = len(time_end)
         if scene != 0 and num_seg > int(video_meta["nb_read_frames"]) * 0.8:
@@ -283,8 +283,8 @@ def video2vtt(
             if first_cuenot__entered:
                 cue_list: list[float, float, str] = [
                     [
-                        float(start),
-                        float(end),
+                        start,
+                        end,
                         lyrics_list[0] if use_ltrics else this_cue,
                     ],
                 ]
@@ -302,11 +302,11 @@ def video2vtt(
                 ]
                 this_cue = get_close_matches(this_cue, cue_to_check, 1, 0)[0]
             if this_cue == cue_list[-1][2]:
-                cue_list[-1][1] = float(end)
+                cue_list[-1][1] = end
                 pbar.update()
                 continue
             # cue_list.append([float(start), float(end), pretty(this_cue)])
-            cue_list.append([float(start), float(end), this_cue])
+            cue_list.append([start, end, this_cue])
             pbar.update()
 
     # Subtract from cue if it is set
