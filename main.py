@@ -4,9 +4,10 @@ Date: 19 Jun 2025
 
 from argparse import ArgumentParser, FileType
 from atexit import register
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator
+from concurrent.futures import ProcessPoolExecutor
 from difflib import get_close_matches
-from itertools import count
+from itertools import count, repeat
 from math import inf
 from os import path, system
 from re import escape, findall, search, split, sub
@@ -43,6 +44,7 @@ def video_to_frames(
     height: int,
     width: int,
     num_frame: int = 1,
+    frame_index: Iterable[int] = [0],  # index (from start_sec) of frames kept
     start_x: int = 0,
     start_y: int = 0,
     end_x: int | None = None,
@@ -59,7 +61,7 @@ def video_to_frames(
     cast_to_ndarray: NDArray = frombuffer(buffer, uint8)
     frame_matrix: NDArray = cast_to_ndarray.reshape(
         (num_frame, height, width, 3)
-    )
+    )[frame_index]
 
     return [
         fromarray(frame_matrix[i, start_y:end_y, start_x:end_x, :])
@@ -67,37 +69,56 @@ def video_to_frames(
     ]
 
 
+def text_from_1_img(img: Image, lang: list[str, ...] | None = None) -> str:
+    return "\n".join(
+        ocrmac.OCR(
+            img,
+            language_preference=lang,
+            detail=False,
+        ).recognize()
+    )
+
+
+def text_from_img(
+    img: list[Image, ...], lang: list[str, ...] | None = None, workers: int = 3
+) -> Iterator[str, ...]:
+    task_len: int = len(img)
+    return ProcessPoolExecutor(max_workers=min(task_len, workers)).map(
+        text_from_1_img,
+        img,
+        repeat(lang),
+        chunksize=max(1, task_len // (workers * 4)),
+    )
+
+
 def extract_txt(
     start_sec: float,
     video_path_escaped: str,
     width: int,
     height: int,
-    start_x: int,
-    start_y: int,
-    end_x: int,
-    end_y: int,
+    num_frame: int = 1,
+    frame_index: Iterable[int] = [0],  # index (from start_sec) of frames kept
+    start_x: int = 0,
+    start_y: int = 0,
+    end_x: int | None = None,
+    end_y: int | None = None,
     lang: list[str] | None = None,
-) -> str:
-    img: Image = video_to_frames(
-        video_path_escaped,
-        start_sec,
-        height,
-        width,
-        1,
-        start_x,
-        start_y,
-        end_x,
-        end_y,
-    )[0]
-
-    txt_list: list[tuple(str, float, list(float))] = ocrmac.OCR(
-        img, language_preference=lang
-    ).recognize()
-
-    if txt_list is False:
-        return
-
-    return "\n".join(txt[0] for txt in txt_list)
+) -> Iterator[str, ...]:
+    return text_from_img(
+        video_to_frames(
+            video_path_escaped,
+            start_sec,
+            height,
+            width,
+            num_frame,
+            frame_index,
+            start_x,
+            start_y,
+            end_x,
+            end_y,
+        ),
+        lang,
+    )
 
 
 def pretty(txt_joined: str) -> str:
@@ -264,16 +285,18 @@ def video2vtt(
         # screenshot_path = f"{dir_temp}/screenshot.png"
         first_cuenot__entered: bool = True
         for start, end in zip(time_start, time_end):
-            this_cue = extract_txt(
-                start,
-                video_path_escaped,
-                width,
-                height,
-                start_x,
-                start_y,
-                end_x,
-                end_y,
-                lang,
+            this_cue: str = next(
+                extract_txt(
+                    start,
+                    video_path_escaped,
+                    width,
+                    height,
+                    start_x=start_x,
+                    start_y=start_y,
+                    end_x=end_x,
+                    end_y=end_y,
+                    lang=lang,
+                )
             )
             if remove != "":
                 this_cue = sub(remove, replace, this_cue)
