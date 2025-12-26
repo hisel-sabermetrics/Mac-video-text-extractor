@@ -37,6 +37,36 @@ def sec2str_time(sec: float) -> str:
     return f"{h:02}:{min:02}:{s:06.3f}"
 
 
+def video_to_frames(
+    path_escaped: str,
+    start_sec: float,
+    height: int,
+    width: int,
+    num_frame: int = 1,
+    start_x: int = 0,
+    start_y: int = 0,
+    end_x: int | None = None,
+    end_y: int | None = None,
+) -> list[Image]:
+    buffer: str = run(
+        f"ffmpeg -ss {start_sec} -i "
+        + path_escaped
+        + f" -frames:v {num_frame} -f rawvideo -pix_fmt rgb24 pipe:",
+        stdout=PIPE,
+        stderr=DEVNULL,
+        shell=True,
+    ).stdout
+    cast_to_ndarray: NDArray = frombuffer(buffer, uint8)
+    frame_matrix: NDArray = cast_to_ndarray.reshape(
+        (num_frame, height, width, 3)
+    )
+
+    return [
+        fromarray(frame_matrix[i, start_y:end_y, start_x:end_x, :])
+        for i in range(num_frame)
+    ]
+
+
 def extract_txt(
     start_sec: float,
     video_path_escaped: str,
@@ -48,20 +78,17 @@ def extract_txt(
     end_y: int,
     lang: list[str] | None = None,
 ) -> str:
-    out: str = run(
-        f"ffmpeg -ss "
-        + start_sec
-        + " -i "
-        + video_path_escaped
-        + " -frames:v 1 -f rawvideo -pix_fmt rgb24 pipe:",
-        stdout=PIPE,
-        stderr=DEVNULL,
-        shell=True,
-    ).stdout
-
-    cast_to_ndarray: NDArray = frombuffer(out, uint8)
-    frame_matrix: NDArray = cast_to_ndarray.reshape([height, width, 3])
-    img: Image = fromarray(frame_matrix[start_y:end_y, start_x:end_x, :])
+    img: Image = video_to_frames(
+        video_path_escaped,
+        float(start_sec),
+        height,
+        width,
+        1,
+        start_x,
+        start_y,
+        end_x,
+        end_y,
+    )[0]
 
     txt_list: list[tuple(str, float, list(float))] = ocrmac.OCR(
         img, language_preference=lang
