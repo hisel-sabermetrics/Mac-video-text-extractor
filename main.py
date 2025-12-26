@@ -10,6 +10,7 @@ from difflib import get_close_matches
 from itertools import count, repeat
 from math import inf
 from os import path, system
+from os.path import exists, expanduser
 from re import escape, findall, search, split, sub
 from subprocess import DEVNULL, PIPE, run
 from typing import BinaryIO, Tuple
@@ -173,25 +174,18 @@ def write_to_file(
         )
         for cue in cue_list
     )
-    try:
+    path_before_i: str = sub(r"\.[^\.]+$", "", expanduser(video_path))
+    if not exists(path_before_i + ".vtt"):
         open(
-            video_path := path.expanduser(
-                sub(r"^.+?\.", "ttv.", video_path[::-1])[::-1]
-            ),
+            path_before_i + ".vtt",
             "x",
         ).write(file_vtt)
-    except FileExistsError:
-        video_path: str = video_path[:-4]
-        for i in count(start=2):
-            try:
-                open(
-                    video_path := video_path + f"-{i}.vtt",
-                    "x",
-                ).write(file_vtt)
-            finally:
-                break
-    finally:
-        print("Saved to " + sub(r"\\(?!\\)", "", video_path))
+        return
+    for i in count(2):
+        if exists(path_before_i + f"-{i}.vtt"):
+            continue
+        open(path_before_i + f"-{i}.vtt", "x").write(file_vtt)
+        return
 
 
 def video2vtt(
