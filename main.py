@@ -20,6 +20,8 @@ from PIL import Image
 from PIL.Image import fromarray
 from tqdm import tqdm
 
+_WRITE_TO_FILE: bool = True  # Flag to allow write
+
 
 def escape_path(raw_path: str) -> str:
     unescape_user_dir = sub(r"\\~", "~", escape(raw_path))
@@ -111,6 +113,9 @@ def seg_from_key(video_path_escaped: str, crop) -> str:
 
 
 def write_to_file(video_path: str, cue_list: list[float, float, str]) -> None:
+    # Check if write is allowed
+    if not _WRITE_TO_FILE:
+        return
     file_vtt: str = "WEBVTT\n\n" + "\n\n".join(
         "{0} --> {1}\n{2}".format(
             sec2str_time(cue[0]), sec2str_time(cue[1]), cue[2]
@@ -146,6 +151,7 @@ def video2vtt(
     lyrics_file: BinaryIO | None = None,
     crop: str = "in_w:in_h:0:0",
     lang: list[str] | None = None,
+    write_file: bool = True,
 ) -> None:
     use_ltrics: bool = lyrics_file is not None
     if use_ltrics:
@@ -250,7 +256,11 @@ def video2vtt(
                         lyrics_list[0] if use_ltrics else this_cue,
                     ],
                 ]
-                register(write_to_file, video_path, cue_list)
+                if write_file:
+                    # Write file at interrupt
+                    # Does not work with sub_from_prev
+                    _WRITE_TO_FILE = True
+                    register(write_to_file, video_path, cue_list)
                 pbar.update()
                 first_cuenot__entered = False
                 continue
@@ -269,7 +279,11 @@ def video2vtt(
             cue_list.append([float(start), float(end), this_cue])
             pbar.update()
 
-    write_to_file(video_path, cue_list)
+    # Write to file
+    if write_file:
+        write_to_file(video_path, cue_list)
+        _WRITE_TO_FILE = False  # Suppress writing another copy
+
     # system(f"rm -rf {dir_temp} >/dev/null 2>&1")
 
 
