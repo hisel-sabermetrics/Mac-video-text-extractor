@@ -275,56 +275,102 @@ def video2vtt(
 
     print(f"Number of scene found: {num_seg}")
 
-    with tqdm(total=num_seg) as pbar:
-        # screenshot_path = f"{dir_temp}/screenshot.png"
-        first_cuenot__entered: bool = True
-        for start, end in zip(time_start, time_end):
-            this_cue: str = next(
-                extract_txt(
-                    start,
-                    video_path_escaped,
-                    width,
-                    height,
-                    start_x=start_x,
-                    start_y=start_y,
-                    end_x=end_x,
-                    end_y=end_y,
-                    lang=lang,
-                )
-            )
-            if remove != "":
-                this_cue = sub(remove, replace, this_cue)
-            if this_cue == "":
-                pbar.update()
-                continue
-            if first_cuenot__entered:
-                cue_list: list[float, float, str] = [
-                    [
+    if use_ltrics:
+        with tqdm(total=num_seg) as pbar:
+            # screenshot_path = f"{dir_temp}/screenshot.png"
+            first_cuenot__entered: bool = True
+            for start, end in zip(time_start, time_end):
+                this_cue: str = next(
+                    extract_txt(
                         start,
-                        end,
-                        lyrics_list[0] if use_ltrics else this_cue,
-                    ],
-                ]
-                if write_file:
-                    # Write file at interrupt
-                    # Does not work with sub_from_prev
-                    _WRITE_TO_FILE = True
-                    register(write_to_file, video_path, cue_list)
-                pbar.update()
-                first_cuenot__entered = False
-                continue
-            if use_ltrics:
+                        video_path_escaped,
+                        width,
+                        height,
+                        start_x=start_x,
+                        start_y=start_y,
+                        end_x=end_x,
+                        end_y=end_y,
+                        lang=lang,
+                    )
+                )
+                if remove != "":
+                    this_cue = sub(remove, replace, this_cue)
+                if this_cue == "":
+                    pbar.update()
+                    continue
+                if first_cuenot__entered:
+                    cue_list: list[float, float, str] = [
+                        [
+                            start,
+                            end,
+                            lyrics_list[0] if use_ltrics else this_cue,
+                        ],
+                    ]
+                    if write_file:
+                        # Write file at interrupt
+                        # Does not work with sub_from_prev
+                        _WRITE_TO_FILE = True
+                        register(write_to_file, video_path, cue_list)
+                    pbar.update()
+                    first_cuenot__entered = False
+                    continue
                 cue_to_check: set[str, str] = lyrics_list[
                     0 : len(cue_list) + 1
                 ]
                 this_cue = get_close_matches(this_cue, cue_to_check, 1, 0)[0]
-            if this_cue == cue_list[-1][2]:
-                cue_list[-1][1] = end
+                if this_cue == cue_list[-1][2]:
+                    cue_list[-1][1] = end
+                    pbar.update()
+                    continue
+                # cue_list.append([float(start), float(end), pretty(this_cue)])
+                cue_list.append([start, end, this_cue])
                 pbar.update()
-                continue
-            # cue_list.append([float(start), float(end), pretty(this_cue)])
-            cue_list.append([start, end, this_cue])
-            pbar.update()
+    else:
+        with tqdm(total=num_seg) as pbar:
+            # screenshot_path = f"{dir_temp}/screenshot.png"
+            first_cuenot__entered: bool = True
+            for start, end in zip(time_start, time_end):
+                this_cue: str = next(
+                    extract_txt(
+                        start,
+                        video_path_escaped,
+                        width,
+                        height,
+                        start_x=start_x,
+                        start_y=start_y,
+                        end_x=end_x,
+                        end_y=end_y,
+                        lang=lang,
+                    )
+                )
+                if remove != "":
+                    this_cue = sub(remove, replace, this_cue)
+                if this_cue == "":
+                    pbar.update()
+                    continue
+                if first_cuenot__entered:
+                    cue_list: list[float, float, str] = [
+                        [
+                            start,
+                            end,
+                            lyrics_list[0] if use_ltrics else this_cue,
+                        ],
+                    ]
+                    if write_file:
+                        # Write file at interrupt
+                        # Does not work with sub_from_prev
+                        _WRITE_TO_FILE = True
+                        register(write_to_file, video_path, cue_list)
+                    pbar.update()
+                    first_cuenot__entered = False
+                    continue
+                if this_cue == cue_list[-1][2]:
+                    cue_list[-1][1] = end
+                    pbar.update()
+                    continue
+                # cue_list.append([float(start), float(end), pretty(this_cue)])
+                cue_list.append([start, end, this_cue])
+                pbar.update()
 
     # Subtract from cue if it is set
     if sub_from_prev != 0:
