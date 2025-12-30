@@ -717,10 +717,6 @@ def video2vtt(
         all_cue, time_start, array(time_end, dtype=float32)
     )
 
-    # Merge based on ocr
-    print("Merging cue")
-    time_start, time_end, all_cue = merge_cue(time_start, time_end, all_cue)
-
     # Apply lyric file
     if lyrics_file is not None:
         lyrics_path: str = lyrics_file.name
@@ -730,6 +726,10 @@ def video2vtt(
         lyrics_file.close()
         print(f"Applying lyrics from " + lyrics_path)
 
+        # Merge first reduce tasks
+        time_start, time_end, all_cue = merge_cue(
+            time_start, time_end, all_cue
+        )
         workers: int = 10
         len_queue: int = 3
         len_pending: int = workers + len_queue
@@ -795,12 +795,9 @@ def video2vtt(
             all_cue, time_start, time_end
         )
 
-        # Merge connected and identical again
-        time_start, time_end, all_cue = merge_cue(
-            time_start, time_end, all_cue
-        )
-
-    cue_list = tuple(zip(time_start, time_end, all_cue))
+    # Merge connected and identical
+    print("Merging cue")
+    cue_list = merge_cue(time_start, time_end, all_cue)
 
     # Subtract from cue if it is set
     if sub_from_prev != 0:
