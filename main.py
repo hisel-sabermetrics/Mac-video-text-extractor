@@ -242,6 +242,40 @@ def extract_between_value(
     ]
 
 
+def merge_cue(
+    time_start: NDArray[float32],
+    time_end: NDArray[float32],
+    all_cue: NDArray[str],
+) -> tuple[NDArray[float32], NDArray[float32], NDArray[str]]:
+
+    # These 3 masks are 1 less in len along axis 0
+    start_end_conected: NDArray[bool_] = time_start[1:] == time_end[:-1]
+    cue_adj_identical: NDArray[bool_] = all_cue[1:] == all_cue[:-1]
+    connected_and_identical: NDArray[bool_] = (
+        start_end_conected & cue_adj_identical
+    )
+    del start_end_conected, cue_adj_identical
+
+    keep: NDArray[bool] = r_[True, ~connected_and_identical]
+    # All cues unique
+    if all(keep):
+        return time_start, time_end, all_cue
+
+    # Set end time to the end of connected and identical
+    diff_in_state: NDArray[int8] = diff(
+        connected_and_identical.astype(int8), prepend=0, append=0
+    )
+    del connected_and_identical
+    i_before_con: NDArray[intp] = flatnonzero(diff_in_state == 1)
+    i_end_con: NDArray[intp] = flatnonzero(diff_in_state == -1)
+    # Extend cue end time
+    time_end[i_before_con] = time_end[i_end_con]
+    del diff_in_state, i_before_con, i_end_con
+
+    # Remove all connected and identical cue after the first cue
+    return time_start[keep], time_end[keep], all_cue[keep]
+
+
 _ALL_FRAME_START_TIME: Optional[str] = None
 _VIDEO_PATH_ESCAPED: Optional[str] = None
 _WIDTH: Optional[int] = None
@@ -553,36 +587,11 @@ def video2vtt(
         all_cue = all_cue[mask]
         del mask
 
+        # Merge based on ocr
         print("Merging cue")
-        # These 3 masks are 1 less in len along axis 0
-        start_end_conected: NDArray[bool_] = time_start[1:] == time_end[:-1]
-        cue_adj_identical: NDArray[bool_] = all_cue[1:] == all_cue[:-1]
-        connected_and_identical: NDArray[bool_] = (
-            start_end_conected & cue_adj_identical
+        time_start, time_end, all_cue = merge_cue(
+            time_start, time_end, all_cue
         )
-        del start_end_conected, cue_adj_identical
-
-        if all(~connected_and_identical):
-            print("All cue unique")
-            del connected_and_identical
-        else:
-            # Set end time to the end of connected and identical
-            diff_in_state: NDArray[int8] = diff(
-                connected_and_identical.astype(int8), prepend=0, append=0
-            )
-            i_before_con: NDArray[intp] = flatnonzero(diff_in_state == 1)
-            i_end_con: NDArray[intp] = flatnonzero(diff_in_state == -1)
-            # Extend cue end time
-            time_end[i_before_con] = time_end[i_end_con]
-            del diff_in_state, i_before_con, i_end_con
-
-            # Remove all connected and identical cue after the first cue
-            keep: NDArray[bool] = r_[True, ~connected_and_identical]
-            del connected_and_identical
-            time_start = time_start[keep]
-            time_end = time_end[keep]
-            all_cue = all_cue[keep]
-            del keep
 
         # Merge connected and identical
         cue_list = tuple(zip(time_start, time_end, all_cue))
