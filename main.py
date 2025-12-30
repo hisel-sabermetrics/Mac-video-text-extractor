@@ -13,7 +13,7 @@ from os import path, system
 from os.path import exists, expanduser
 from re import escape, findall, search, split, sub
 from subprocess import DEVNULL, PIPE, run
-from typing import Any, BinaryIO, Optional, Tuple
+from typing import Any, Optional, TextIO, Tuple
 
 from ffmpeg import input
 from numpy import (
@@ -375,7 +375,7 @@ def video2vtt(
     remove: str = "",
     replace: str = "",
     scene: float = 0.02,
-    lyrics_file: BinaryIO | None = None,
+    lyrics_file: TextIO | None = None,
     sub_from_prev: float = 0,
     min_to_sub: float = 0,
     crop: str = "in_w:in_h:0:0",
@@ -596,6 +596,10 @@ def video2vtt(
         # Merge connected and identical
         cue_list = tuple(zip(time_start, time_end, all_cue))
 
+        # Apply lyric file
+        if use_ltrics:
+            print(f"Applying lyrics from {lyrics_file}")
+
     # Subtract from cue if it is set
     if sub_from_prev != 0:
         print("Adjusting end time")
@@ -642,7 +646,7 @@ if __name__ == "__main__":
     if args.lang == ["None"]:
         args.lang = None
 
-    lyrics_set: list[BinaryIO | None] = [None] * len(args.path)
+    lyrics_set: list[TextIO | None] = [None] * len(args.path)
     if args.lyrics is not None:
         for i in range(len(args.lyrics)):
             lyrics_set[i] = args.lyrics[i]
