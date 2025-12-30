@@ -562,7 +562,7 @@ def video2vtt(
                 lang,
             )
             with tqdm(total=num_seg) as pbar:
-                workers: list[Future[tuple[NDArray[float32], tuple[str]]]] = [
+                workers: list[Future[tuple[str]]] = [
                     pool.submit(_timestamps_to_text, timestamps)
                     for timestamps in timestamp_list
                 ]
