@@ -530,6 +530,35 @@ def old_video2vtt(
     # system(f"rm -rf {dir_temp} >/dev/null 2>&1")
 
 
+_LYRICS_LIST: list[str] = None
+_SIZE_QUEUE: int = None
+
+
+def _init_match(lyrics_list: list[str], size_queue: int) -> None:
+    global _LYRICS_LIST, _SIZE_QUEUE
+    _LYRICS_LIST = lyrics_list
+    _SIZE_QUEUE = size_queue
+
+
+def _get_match(
+    cue: str,
+    highest_i_used: int,
+) -> tuple[str, int]:
+    lyrics_checking: list[str] = _LYRICS_LIST[
+        : highest_i_used + _SIZE_QUEUE * 2 + 3
+    ]
+    cue_obtained: list[str] = get_close_matches(
+        cue,
+        lyrics_checking,
+        1,
+        0.3,
+    )
+    if cue_obtained:
+        cue_obtained = cue_obtained[0]
+        return cue_obtained, lyrics_checking.index(cue_obtained)
+    return "", 0
+
+
 def video2vtt(
     video_path: str,
     remove: str = "",
@@ -542,12 +571,6 @@ def video2vtt(
     lang: list[str] | None = None,
     write_file: bool = True,
 ) -> None:
-    use_ltrics: bool = lyrics_file is not None
-    if use_ltrics:
-        lyrics_list: list[str] = [
-            cue.strip() for cue in split("\n{2,}", lyrics_file.read())
-        ]
-        lyrics_file.close()
     # root: str = sub(r"^.+?\/(?!\/)", "", path.realpath(__file__)[::-1])[::-1]
     # dir_temp = f"{root}/temp"
     video_path_escaped = escape_path(video_path)
@@ -617,148 +640,171 @@ def video2vtt(
 
     print(f"Number of scene found: {num_seg}")
 
-    if use_ltrics:
-        with tqdm(total=num_seg) as pbar:
-            # screenshot_path = f"{dir_temp}/screenshot.png"
-            first_cuenot__entered: bool = True
-            for start, end in zip(time_start, time_end):
-                this_cue: str = next(
-                    extract_txt(
-                        start,
-                        video_path_escaped,
-                        width,
-                        height,
-                        start_x=start_x,
-                        start_y=start_y,
-                        end_x=end_x,
-                        end_y=end_y,
-                        lang=lang,
-                    )
-                )
-                if remove != "":
-                    this_cue = sub(remove, replace, this_cue)
-                if this_cue == "":
-                    pbar.update()
-                    continue
-                if first_cuenot__entered:
-                    cue_list: list[float, float, str] = [
-                        [
-                            start,
-                            end,
-                            lyrics_list[0] if use_ltrics else this_cue,
-                        ],
-                    ]
-                    if write_file:
-                        # Write file at interrupt
-                        # Does not work with sub_from_prev
-                        _WRITE_TO_FILE = True
-                        register(write_to_file, video_path, cue_list)
-                    pbar.update()
-                    first_cuenot__entered = False
-                    continue
-                cue_to_check: set[str, str] = lyrics_list[
-                    0 : len(cue_list) + 1
-                ]
-                this_cue = get_close_matches(this_cue, cue_to_check, 1, 0)[0]
-                if this_cue == cue_list[-1][2]:
-                    cue_list[-1][1] = end
-                    pbar.update()
-                    continue
-                # cue_list.append([float(start), float(end), pretty(this_cue)])
-                cue_list.append([start, end, this_cue])
-                pbar.update()
-    else:
-        keyframe_start_time: list[float, ...] = keyframe_timestamp(
-            video_path_escaped
-        ) + [video_length(video_path_escaped) + 1]
-        if keyframe_start_time[0] != 0:
-            keyframe_start_time = [0] + keyframe_start_time
+    keyframe_start_time: list[float, ...] = keyframe_timestamp(
+        video_path_escaped
+    ) + [video_length(video_path_escaped) + 1]
+    if keyframe_start_time[0] != 0:
+        keyframe_start_time = [0] + keyframe_start_time
 
-        all_frame_start_time: NDArray[float32] = all_frame_timestame(
-            video_path_escaped
+    all_frame_start_time: NDArray[float32] = all_frame_timestame(
+        video_path_escaped
+    )
+    # Cast to NDArray
+    time_start: NDArray = array(time_start, float32)
+    # Split time_start by keyframe
+    timestamp_list: list[NDArray[float32]] = [
+        time
+        for i in range(1, len(keyframe_start_time))
+        if (
+            time := extract_between_value(
+                time_start,
+                keyframe_start_time[i - 1],
+                keyframe_start_time[i],
+            )
+        ).size
+        != 0  # Do nothing if this seg is not used
+    ]
+    del keyframe_start_time
+    # Get time of each frame to extract text from in this seg
+    print("Extracting texts")
+    with ProcessPoolExecutor(
+        3,
+        initializer=_init_worker,
+        initargs=(
+            all_frame_start_time,
+            video_path_escaped,
+            width,
+            height,
+            start_x,
+            start_y,
+            end_x,
+            end_y,
+            lang,
+        ),
+    ) as pool:
+        del (
+            all_frame_start_time,
+            video_path_escaped,
+            width,
+            height,
+            start_x,
+            start_y,
+            end_x,
+            end_y,
+            lang,
         )
-        # Cast to NDArray
-        time_start: NDArray = array(time_start, float32)
-        # Split time_start by keyframe
-        timestamp_list: list[NDArray[float32]] = [
-            time
-            for i in range(1, len(keyframe_start_time))
-            if (
-                time := extract_between_value(
-                    time_start,
-                    keyframe_start_time[i - 1],
-                    keyframe_start_time[i],
-                )
-            ).size
-            != 0  # Do nothing if this seg is not used
+        with tqdm(total=num_seg) as pbar:
+            workers: list[Future[tuple[str]]] = [
+                pool.submit(_timestamps_to_text, timestamps)
+                for timestamps in timestamp_list
+            ]
+            del timestamp_list
+            # Update pbar
+            for task in as_completed(workers):
+                pbar.update(len(task.result()))
+
+        # Join all output
+        print("Collecting")
+        all_cue: NDArray[str] = concatenate(
+            [result.result() for result in workers],
+            dtype=object,
+            casting="safe",
+        )
+
+    # Remove all empty cue
+    print("Removing empty cue")
+    mask: NDArrat[bool_] = all_cue != ""
+    time_start = time_start[mask]
+    time_end = array(time_end, dtype=float32)[mask]
+    all_cue = all_cue[mask]
+    del mask
+
+    # Merge based on ocr
+    print("Merging cue")
+    time_start, time_end, all_cue = merge_cue(time_start, time_end, all_cue)
+
+    # Apply lyric file
+    if lyrics_file is not None:
+        lyrics_path: str = lyrics_file.name
+        lyrics_list: list[str] = [
+            cue.strip() for cue in split("\n{2,}", lyrics_file.read())
         ]
-        del keyframe_start_time
-        # Get time of each frame to extract text from in this seg
-        print("Extracting texts")
-        with ProcessPoolExecutor(
-            3,
-            initializer=_init_worker,
-            initargs=(
-                all_frame_start_time,
-                video_path_escaped,
-                width,
-                height,
-                start_x,
-                start_y,
-                end_x,
-                end_y,
-                lang,
-            ),
-        ) as pool:
-            del (
-                all_frame_start_time,
-                video_path_escaped,
-                width,
-                height,
-                start_x,
-                start_y,
-                end_x,
-                end_y,
-                lang,
-            )
-            with tqdm(total=num_seg) as pbar:
-                workers: list[Future[tuple[str]]] = [
-                    pool.submit(_timestamps_to_text, timestamps)
-                    for timestamps in timestamp_list
-                ]
-                del timestamp_list
-                # Update pbar
-                for task in as_completed(workers):
-                    pbar.update(len(task.result()))
+        lyrics_file.close()
+        print(f"Applying lyrics from " + lyrics_path)
 
-            # Join all output
-            print("Collecting")
-            all_cue: NDArray[str] = concatenate(
-                [result.result() for result in workers],
-                dtype=object,
-                casting="safe",
-            )
+        workers: int = 10
+        len_queue: int = 3
+        len_pending: int = workers + len_queue
+        len_cue: int = all_cue.size
 
-        # Remove all empty cue
-        print("Removing empty cue")
-        mask: NDArrat[bool_] = all_cue != ""
+        with (
+            ProcessPoolExecutor(
+                max_workers=workers,
+                initializer=_init_match,
+                initargs=(lyrics_list, len_pending),
+            ) as pool,
+            tqdm(total=len_cue) as pbar,
+        ):
+
+            # Submit first batch
+            cue_pending: list[Future[tuple[str, int]]] = [
+                pool.submit(_get_match, all_cue[i], 0)
+                for i in range(min(len_pending, len_cue))
+            ]
+
+            # Check length
+            if len_cue <= len_pending:
+                all_cue = cue_pending
+                for _ in as_completed(cue_pending):
+                    pbar.update()
+            else:
+                # Use producer consumer pattern if longer
+                i: int = len_pending  # Track index
+                highest_i_used: int = 0
+                # Replace original value with Future
+                all_cue[:len_pending]: NDArray[
+                    str | Future[str, int]
+                ] = cue_pending
+                while cue_pending:
+                    done: set[Future[tuple[str, int]]] = wait(
+                        cue_pending, return_when="FIRST_COMPLETED"
+                    )[0]
+                    highest_i_used: int = max(
+                        highest_i_used,
+                        *[task.result()[1] for task in done],
+                    )
+                    # Producer
+                    for task in done:
+                        pbar.update()
+                        cue_pending.remove(task)
+                        # Submit new task
+                        if i < len_cue:
+                            all_cue[i] = pool.submit(
+                                _get_match,
+                                all_cue[i],
+                                highest_i_used,
+                            )
+                            cue_pending.append(all_cue[i])
+                            i = i + 1
+
+        # Assign back to all cue
+        all_cue: NDArray[str] = array(
+            [cue_matched.result()[0] for cue_matched in all_cue]
+        )
+
+        # Remove empty cue
+        mask: NDArray[bool_] = all_cue != ""
         time_start = time_start[mask]
         time_end = array(time_end, dtype=float32)[mask]
         all_cue = all_cue[mask]
         del mask
 
-        # Merge based on ocr
-        print("Merging cue")
+        # Merge connected and identical again
         time_start, time_end, all_cue = merge_cue(
             time_start, time_end, all_cue
         )
 
-        # Merge connected and identical
-        cue_list = tuple(zip(time_start, time_end, all_cue))
-
-        # Apply lyric file
-        if use_ltrics:
-            print(f"Applying lyrics from {lyrics_file}")
+    cue_list = tuple(zip(time_start, time_end, all_cue))
 
     # Subtract from cue if it is set
     if sub_from_prev != 0:
