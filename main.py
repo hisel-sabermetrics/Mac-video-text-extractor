@@ -370,6 +370,166 @@ def write_to_file(
         return
 
 
+def old_video2vtt(
+    video_path: str,
+    remove: str = "",
+    replace: str = "",
+    scene: float = 0.02,
+    lyrics_file: TextIO | None = None,
+    sub_from_prev: float = 0,
+    min_to_sub: float = 0,
+    crop: str = "in_w:in_h:0:0",
+    lang: list[str] | None = None,
+    write_file: bool = True,
+) -> None:
+    use_ltrics: bool = lyrics_file is not None
+    if use_ltrics:
+        lyrics_list: list[str] = [
+            cue.strip() for cue in split("\n{2,}", lyrics_file.read())
+        ]
+        lyrics_file.close()
+    # root: str = sub(r"^.+?\/(?!\/)", "", path.realpath(__file__)[::-1])[::-1]
+    # dir_temp = f"{root}/temp"
+    video_path_escaped = escape_path(video_path)
+    # system(f"mkdir -p '{dir_temp}'")
+
+    video_meta: dict = eval(
+        run(
+            [
+                "ffprobe",
+                "-i",
+                video_path,
+                "-print_format",
+                "json",
+                "-loglevel",
+                "fatal",
+                "-show_streams",
+                "-count_frames",
+                "-select_streams",
+                "v",
+            ],
+            stdout=PIPE,
+            stderr=DEVNULL,
+        ).stdout
+    )["streams"][0]
+
+    num_seg = inf
+    while True:
+        if scene != 0:
+            seg_change: str = seg_from_scene(video_path_escaped, scene, crop)
+        else:
+            scene = 0
+            seg_change: str = seg_from_key(video_path_escaped, crop)
+
+        time_start: list[float, ...] = [
+            float(t) for t in findall(r"(?<=pts_time:)[0-9\.]++", seg_change)
+        ]
+        time_end: list[float, ...] = time_start[1:]
+        time_start.pop()
+        num_seg: int = len(time_end)
+        if scene != 0 and num_seg > int(video_meta["nb_read_frames"]) * 0.8:
+            scene = 0
+        else:
+            break
+
+    width: int = video_meta["width"]
+    height: int = video_meta["height"]
+    crop_param: list[int] = [
+        int(
+            eval(
+                sub(r"^out_[hw]=", "", param),
+                {
+                    "in_h": height,
+                    "in_w": width,
+                },
+            )
+        )
+        for param in split(":", crop)
+    ]
+    start_x: int = 0 if len(crop_param) <= 2 else int(crop_param[2])
+    start_y: int = 0 if len(crop_param) <= 3 else int(crop_param[3])
+    end_x: int = int(crop_param[0]) + start_x
+    end_y: int = (
+        int(crop_param[0]) + start_y
+        if len(crop_param) == 1
+        else int(crop_param[1]) + start_y
+    )
+
+    print(f"Number of scene found: {num_seg}")
+
+    with tqdm(total=num_seg) as pbar:
+        # screenshot_path = f"{dir_temp}/screenshot.png"
+        first_cuenot__entered: bool = True
+        for start, end in zip(time_start, time_end):
+            this_cue: str = next(
+                extract_txt(
+                    start,
+                    video_path_escaped,
+                    width,
+                    height,
+                    start_x=start_x,
+                    start_y=start_y,
+                    end_x=end_x,
+                    end_y=end_y,
+                    lang=lang,
+                )
+            )
+            if remove != "":
+                this_cue = sub(remove, replace, this_cue)
+            if this_cue == "":
+                pbar.update()
+                continue
+            if first_cuenot__entered:
+                cue_list: list[float, float, str] = [
+                    [
+                        start,
+                        end,
+                        lyrics_list[0] if use_ltrics else this_cue,
+                    ],
+                ]
+                if write_file:
+                    # Write file at interrupt
+                    # Does not work with sub_from_prev
+                    _WRITE_TO_FILE = True
+                    register(write_to_file, video_path, cue_list)
+                pbar.update()
+                first_cuenot__entered = False
+                continue
+            if use_ltrics:
+                cue_to_check: set[str, str] = lyrics_list[
+                    0 : len(cue_list) + 1
+                ]
+                this_cue = get_close_matches(this_cue, cue_to_check, 1, 0)[0]
+            if this_cue == cue_list[-1][2]:
+                cue_list[-1][1] = end
+                pbar.update()
+                continue
+            # cue_list.append([float(start), float(end), pretty(this_cue)])
+            cue_list.append([start, end, this_cue])
+            pbar.update()
+
+    # Subtract from cue if it is set
+    if sub_from_prev != 0:
+        # Cast to ndarray
+        cue_list: NDArray[Tuple[int, 3], object_] = array(cue_list)
+        start_time: NDArray[Tuple[int], float] = cue_list[:, 0].astype(float)
+        end_time: NDArray[Tuple[int], float] = cue_list[:, 1].astype(float)
+        end_time = where(
+            (end_time == append(start_time[1:], 0))
+            & (end_time - start_time >= min_to_sub),
+            end_time - sub_from_prev,
+            end_time,
+        )
+        cue_list = tuple(zip(start_time, end_time, cue_list[:, 2]))
+
+    # Write to file
+    if write_file:
+        write_to_file(video_path, cue_list)
+        _WRITE_TO_FILE = False  # Suppress writing another copy
+
+    # system(f"rm -rf {dir_temp} >/dev/null 2>&1")
+
+
 def video2vtt(
     video_path: str,
     remove: str = "",
@@ -640,6 +800,14 @@ if __name__ == "__main__":
     parser.add_argument(
         "--min-seg-len-for-subtract", nargs="?", type=float, default=0
     )
+    parser.add_argument(
+        "--version",
+        nargs=1,
+        type=int,
+        choices=(1, 2),
+        required=False,
+        default=[2],
+    )
     args = parser.parse_args()
     if len(args.pattern) == 1:
         args.pattern = [args.pattern[0], ""]
@@ -650,15 +818,30 @@ if __name__ == "__main__":
     if args.lyrics is not None:
         for i in range(len(args.lyrics)):
             lyrics_set[i] = args.lyrics[i]
-    for file_path, lyrics_path in zip(args.path, lyrics_set):
-        video2vtt(
-            video_path=file_path,
-            remove=args.pattern[0],
-            replace=args.pattern[1],
-            scene=args.min_change,
-            lyrics_file=lyrics_path,
-            sub_from_prev=args.subtract_from_pre,
-            min_to_sub=args.min_seg_len_for_subtract,
-            crop=args.crop,
-            lang=args.lang,
-        )
+    match args.version[0]:
+        case 1:
+            for file_path, lyrics_path in zip(args.path, lyrics_set):
+                old_video2vtt(
+                    video_path=file_path,
+                    remove=args.pattern[0],
+                    replace=args.pattern[1],
+                    scene=args.min_change,
+                    lyrics_file=lyrics_path,
+                    sub_from_prev=args.subtract_from_pre,
+                    min_to_sub=args.min_seg_len_for_subtract,
+                    crop=args.crop,
+                    lang=args.lang,
+                )
+        case 2:
+            for file_path, lyrics_path in zip(args.path, lyrics_set):
+                video2vtt(
+                    video_path=file_path,
+                    remove=args.pattern[0],
+                    replace=args.pattern[1],
+                    scene=args.min_change,
+                    lyrics_file=lyrics_path,
+                    sub_from_prev=args.subtract_from_pre,
+                    min_to_sub=args.min_seg_len_for_subtract,
+                    crop=args.crop,
+                    lang=args.lang,
+                )
