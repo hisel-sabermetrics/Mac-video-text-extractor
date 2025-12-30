@@ -713,11 +713,9 @@ def video2vtt(
 
     # Remove all empty cue
     print("Removing empty cue")
-    mask: NDArrat[bool_] = all_cue != ""
-    time_start = time_start[mask]
-    time_end = array(time_end, dtype=float32)[mask]
-    all_cue = all_cue[mask]
-    del mask
+    all_cue, time_start, time_end = remove_empty(
+        all_cue, time_start, array(time_end, dtype=float32)
+    )
 
     # Merge based on ocr
     print("Merging cue")
@@ -793,11 +791,9 @@ def video2vtt(
         )
 
         # Remove empty cue
-        mask: NDArray[bool_] = all_cue != ""
-        time_start = time_start[mask]
-        time_end = array(time_end, dtype=float32)[mask]
-        all_cue = all_cue[mask]
-        del mask
+        all_cue, time_start, time_end = remove_empty(
+            all_cue, time_start, time_end
+        )
 
         # Merge connected and identical again
         time_start, time_end, all_cue = merge_cue(
@@ -825,7 +821,16 @@ def video2vtt(
     if write_file:
         print("Writing to file")
         write_to_file(video_path, cue_list)
-        _WRITE_TO_FILE = False  # Suppress writing another copy
+        _WRITE_TO_FILE = False
+
+
+def remove_empty(
+    all_cue: NDArray[str], *all_array_to_apply: NDArray[Any]
+) -> tuple[NDArray[str], NDArray[Any], ...]:
+    mask: NDArray[bool_] = all_cue != ""
+    yield all_cue[mask]
+    for arr in all_array_to_apply:
+        yield arr[mask]
 
     # system(f"rm -rf {dir_temp} >/dev/null 2>&1")
 
