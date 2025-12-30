@@ -797,22 +797,21 @@ def video2vtt(
 
     # Merge connected and identical
     print("Merging cue")
-    cue_list = merge_cue(time_start, time_end, all_cue)
+    time_start, time_end, all_cue = merge_cue(time_start, time_end, all_cue)
 
     # Subtract from cue if it is set
     if sub_from_prev != 0:
         print("Adjusting end time")
         # Cast to ndarray
-        cue_list: NDArray[Tuple[int, 3], object_] = array(cue_list)
-        start_time: NDArray[Tuple[int], float] = cue_list[:, 0].astype(float)
-        end_time: NDArray[Tuple[int], float] = cue_list[:, 1].astype(float)
-        end_time = where(
-            (end_time == append(start_time[1:], 0))
-            & (end_time - start_time >= min_to_sub),
-            end_time - sub_from_prev,
-            end_time,
+        time_end = where(
+            (time_end == append(time_start[1:], 0))
+            & (time_end - time_start >= min_to_sub),
+            time_end - sub_from_prev,
+            time_end,
         )
-        cue_list = tuple(zip(start_time, end_time, cue_list[:, 2]))
+        cue_list: Tuple[Tuple[float, float, str]] = tuple(
+            zip(time_start, time_end, all_cue)
+        )
 
     # Write to file
     if write_file:
