@@ -101,15 +101,35 @@ def text_from_1_img(img: Image, lang: list[str, ...] | None = None) -> str:
 
 
 def text_from_img(
-    img: list[Image, ...], lang: list[str, ...] | None = None, workers: int = 3
-) -> Iterator[str, ...]:
-    task_len: int = len(img)
-    return ProcessPoolExecutor(max_workers=min(task_len, workers)).map(
-        text_from_1_img,
-        img,
-        repeat(lang),
-        chunksize=max(1, task_len // (workers * 4)),
-    )
+    imgs: list[Image, ...],
+    lang: list[str, ...] | None = None,
+    workers: int = 3,
+) -> list[str, ...]:
+    task_len: int = len(imgs)
+    pool = ProcessPoolExecutor(max_workers=min(task_len, workers))
+    results: list[Future[str]] = [
+        pool.submit(text_from_1_img, img, lang) for img in imgs
+    ]
+    tasks_to_check: list[Future[str]] = results
+    timeout: list[Future[str]] = []
+    i_to_check: list[int] = list(range(task_len))
+    i_timeout: list[int] = []
+    texts: list[str | None] = [None] * task_len
+    while tasks_to_check:
+        for result in as_completed(tasks_to_check, 5):
+            i: int = i_to_check[tasks_to_check.index(result)]
+            # No timeout
+            if result.exception() is None:
+                texts[i] = result.result()
+                continue
+            # Restart task and track
+            timeout.append(pool.submit(text_from_1_img, imgs[i], lang))
+            i_timeout.append(i)
+        # Only check timed out tasks
+        tasks_to_check = timeout
+        i_to_check = i_timeout
+
+    return texts
 
 
 def extract_txt(
@@ -124,7 +144,7 @@ def extract_txt(
     end_x: int | None = None,
     end_y: int | None = None,
     lang: list[str] | None = None,
-) -> Iterator[str, ...]:
+) -> list[str, ...]:
     return text_from_img(
         video_to_frames(
             video_path_escaped,
@@ -313,7 +333,7 @@ def _init_worker(
 
 def _timestamps_to_text(
     timestamps: NDArray[float32],
-) -> tuple[str]:
+) -> list[str]:
     # Get index of frames
     index: NDArray[intp] = flatnonzero(
         isin(
@@ -328,7 +348,7 @@ def _timestamps_to_text(
     # Get num frames from first frame to last inclusive
     num_frames: int = index[-1] + 1
     # Get text
-    texts: Iterator[str] = extract_txt(
+    return extract_txt(
         timestamps[0],
         _VIDEO_PATH_ESCAPED,
         _WIDTH,
@@ -341,7 +361,6 @@ def _timestamps_to_text(
         _END_Y,
         _LANG,
     )
-    return tuple(texts)
 
 
 def write_to_file(
