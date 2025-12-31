@@ -186,26 +186,35 @@ def pretty(txt_joined: str) -> str:
     return txt_joined
 
 
-def seg_from_scene(video_path: str, scene: float, crop: str) -> str:
-    return (
-        run(
-            [
-                "ffmpeg",
-                "-i",
-                video_path,
-                "-filter:v",
-                f"crop={crop},"
-                "hue=s=0,"  # Turn greyscale
-                "maskfun=low=230:high=230:fill=0:sum=255,"  # Mask
-                f"select='gt(scene,{scene})',showinfo",
-                "-f",
-                "null",
-                "-",
-            ],
-            stdout=DEVNULL,
-            stderr=PIPE,
-            text=True,
-        ).stderr,
+def seg_from_scene(
+    video_path: str, scene: float, crop: str
+) -> NDArray[float32]:
+    return array(
+        [
+            float(t)
+            for t in findall(
+                r"(?<=pts_time:)[0-9\.]++",
+                run(
+                    [
+                        "ffmpeg",
+                        "-i",
+                        video_path,
+                        "-filter:v",
+                        f"crop={crop},"
+                        "hue=s=0,"  # Turn greyscale
+                        "maskfun=low=230:high=230:fill=0:sum=255,"  # Mask
+                        f"select='gt(scene,{scene})',showinfo",
+                        "-f",
+                        "null",
+                        "-",
+                    ],
+                    stdout=DEVNULL,
+                    stderr=PIPE,
+                    text=True,
+                ).stderr,
+            )
+        ],
+        float32,
     )
 
 
@@ -472,15 +481,11 @@ def old_video2vtt(
 
     num_seg = inf
     while True:
-        if scene != 0:
-            seg_change: str = seg_from_scene(video_path, scene, crop)
-        else:
-            scene = 0
-            seg_change: str = seg_from_key(video_path_escaped, crop)
-
-        time_start: list[float, ...] = [
-            float(t) for t in findall(r"(?<=pts_time:)[0-9\.]++", seg_change)
-        ]
+        time_start: list[float, ...] = (
+            seg_from_scene(video_path, scene, crop).tolist()
+            if scene != 0
+            else all_frame_timestamp(video_path).tolist()
+        )
         time_end: list[float, ...] = time_start[1:]
         time_start.pop()
         num_seg: int = len(time_end)
@@ -653,15 +658,10 @@ def video2vtt(
         ).stdout
     )["streams"][0]
 
-    seg_change: str = (
+    time_start: NDArray[float32] = (
         seg_from_scene(video_path, scene, crop)
         if scene != 0
         else all_frame_timestamp(video_path)
-    )
-
-    time_start: NDArray[float32] = array(
-        [float(t) for t in findall(r"(?<=pts_time:)[0-9\.]++", seg_change)],
-        float32,
     )
     time_end: NDArray[float32] = time_start[1:]
     time_start = time_start[:-1]
