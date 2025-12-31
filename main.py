@@ -218,18 +218,6 @@ def seg_from_scene(
     )
 
 
-def seg_from_key(video_path_escaped: str, crop) -> str:
-    return run(
-        "ffmpeg -i " + video_path_escaped
-        # + " -filter:v \"select='eq(key,1)',showinfo\" -f null -",
-        + ' -filter:v "' f"crop={crop},showinfo" '" -f null -',
-        stdout=DEVNULL,
-        stderr=PIPE,
-        text=True,
-        shell=True,
-    ).stderr
-
-
 def video_length(video_path: str) -> float:
     return float(
         run(
@@ -454,10 +442,6 @@ def old_video2vtt(
             cue.strip() for cue in split("\n{2,}", lyrics_file.read())
         ]
         lyrics_file.close()
-    # root: str = sub(r"^.+?\/(?!\/)", "", path.realpath(__file__)[::-1])[::-1]
-    # dir_temp = f"{root}/temp"
-    video_path_escaped = escape_path(video_path)
-    # system(f"mkdir -p '{dir_temp}'")
 
     video_meta: dict = eval(
         run(
@@ -479,7 +463,6 @@ def old_video2vtt(
         ).stdout
     )["streams"][0]
 
-    num_seg = inf
     while True:
         time_start: list[float, ...] = (
             seg_from_scene(video_path, scene, crop).tolist()
@@ -633,10 +616,6 @@ def video2vtt(
     lang: list[str] | None = None,
     write_file: bool = True,
 ) -> None:
-    # root: str = sub(r"^.+?\/(?!\/)", "", path.realpath(__file__)[::-1])[::-1]
-    # dir_temp = f"{root}/temp"
-    video_path_escaped = escape_path(video_path)
-    # system(f"mkdir -p '{dir_temp}'")
 
     video_meta: dict = eval(
         run(
@@ -872,8 +851,6 @@ def remove_empty(
     yield all_cue[mask]
     for arr in all_array_to_apply:
         yield arr[mask]
-
-    # system(f"rm -rf {dir_temp} >/dev/null 2>&1")
 
 
 if __name__ == "__main__":
