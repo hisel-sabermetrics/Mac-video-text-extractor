@@ -217,7 +217,7 @@ def video_length(video_path_escaped: str) -> float:
     )
 
 
-def all_frame_timestame(video_path_escaped: str) -> NDArray[float32]:
+def all_frame_timestamp(video_path_escaped: str) -> NDArray[float32]:
     return array(
         findall(
             r"(?<=pts_time:)[0-9\.]++",
@@ -665,7 +665,7 @@ def video2vtt(
     if keyframe_start_time[0] != 0:
         keyframe_start_time = [0] + keyframe_start_time
 
-    all_frame_start_time: NDArray[float32] = all_frame_timestame(
+    all_frame_start_time: NDArray[float32] = all_frame_timestamp(
         video_path_escaped
     )
     # Cast to NDArray
