@@ -25,6 +25,7 @@ from numpy import (
     flatnonzero,
     float32,
     frombuffer,
+    fromiter,
     int8,
     intp,
     isin,
@@ -604,6 +605,17 @@ def _get_match(
     return "", 0
 
 
+def remove_empty_line(string: str):
+    # Strip whitespace at start and end
+    string = string.strip()
+    # Remove duplicate newline
+    string = sub("\n+", "\n", string)
+    # Squash all whitespace to 1 space
+    string = sub("[\t ]+", " ", string)
+    # Remove lines of only 1 space
+    return string.replace("\n \n", "")
+
+
 def video2vtt(
     video_path: str,
     remove: str = "",
@@ -735,6 +747,30 @@ def video2vtt(
             [result.result() for result in workers],
             dtype=object,
             casting="safe",
+        )
+
+    # Apply replace
+    if remove != "":
+        if replace == "":
+            print(f"Removing {remove}")
+        else:
+            print(f"Replacing {remove} with {replace}")
+        # Merge first reduce tasks
+        time_start, time_end, all_cue = merge_cue(
+            time_start, time_end, all_cue
+        )
+        workers: int = 10
+        all_cue = fromiter(
+            ProcessPoolExecutor(workers).map(
+                sub, repeat(remove), repeat(replace), all_cue
+            ),
+            object,
+        )
+
+        # Remove empty lines
+        all_cue = fromiter(
+            ProcessPoolExecutor(workers).map(remove_empty_line, all_cue),
+            object,
         )
 
     # Remove all empty cue
