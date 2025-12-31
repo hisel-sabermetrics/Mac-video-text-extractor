@@ -4,18 +4,15 @@ Date: 19 Jun 2025
 
 from argparse import ArgumentParser, FileType
 from atexit import register
-from collections.abc import Iterable, Iterator
+from collections.abc import Iterable
 from concurrent.futures import Future, ProcessPoolExecutor, as_completed, wait
 from difflib import get_close_matches
-from itertools import chain, count, repeat
-from math import inf
-from os import path, system
+from itertools import count, repeat
 from os.path import exists, expanduser
-from re import escape, findall, search, split, sub
+from re import escape, findall, split, sub
 from subprocess import DEVNULL, PIPE, run
 from typing import Any, Optional, TextIO, Tuple
 
-from ffmpeg import input
 from numpy import (
     append,
     array,
@@ -34,7 +31,6 @@ from numpy import (
     uint8,
     where,
 )
-from numpy._typing import _32Bit
 from numpy.typing import NDArray
 from ocrmac import ocrmac
 from PIL import Image
