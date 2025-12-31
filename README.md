@@ -81,6 +81,7 @@ video2vtt(
 ```
 Arguments:
 | Name | Type | Information | Default |
+| --- | --- | --- | --- |
 | `video_path` | `str` | The path to 1 video file | This is required |
 | `remove` | `str` | Regex to select texts to remove | `` |
 | `replace` | `str` | String to replace selected text from above | `` |
