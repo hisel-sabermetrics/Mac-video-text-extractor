@@ -615,24 +615,18 @@ def video2vtt(
         ).stdout
     )["streams"][0]
 
-    num_seg = inf
-    while True:
-        if scene != 0:
-            seg_change: str = seg_from_scene(video_path_escaped, scene, crop)
-        else:
-            scene = 0
-            seg_change: str = seg_from_key(video_path_escaped, crop)
+    seg_change: str = (
+        seg_from_scene(video_path_escaped, scene, crop)
+        if scene != 0
+        else all_frame_timestamp(video_path_escaped)
+    )
 
-        time_start: list[float, ...] = [
-            float(t) for t in findall(r"(?<=pts_time:)[0-9\.]++", seg_change)
-        ]
-        time_end: list[float, ...] = time_start[1:]
-        time_start.pop()
-        num_seg: int = len(time_end)
-        if scene != 0 and num_seg > int(video_meta["nb_read_frames"]) * 0.8:
-            scene = 0
-        else:
-            break
+    time_start: list[float, ...] = [
+        float(t) for t in findall(r"(?<=pts_time:)[0-9\.]++", seg_change)
+    ]
+    time_end: list[float, ...] = time_start[1:]
+    time_start.pop()
+    num_seg: int = len(time_end)
 
     width: int = video_meta["width"]
     height: int = video_meta["height"]
