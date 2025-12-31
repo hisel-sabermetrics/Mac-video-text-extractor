@@ -661,6 +661,31 @@ def video2vtt(
     write_file: bool = True,
     out_format: str = "vtt",
 ) -> None:
+    """Extract texts from a video file and write to disk
+
+    Keyword arguments:
+    video_path    -- path to the video file
+    remove        -- pattern to remove text
+                     (default "")
+    replace       -- the str literal to replace with
+                     (default "")
+    scene         -- the min diff between 2 fames before doing a new OCR
+                     (default 0.02)
+    lyrics_file   -- opened text file containing the texts to compare
+                     (default None)
+    sub_from_prev -- seconds to subtract before an immediate cue
+                     (default 0)
+    min_to_sub    -- min length in seconds to apply sub_from_prev
+                     (default 0)
+    crop          -- ffmpeg argument to crop the video
+                     (default "in_w:in_h:0:0")
+    lang          -- list of lang for OCR to use
+                     (default None)
+    write_file    -- bool flag for weather to write result
+                     (default True)
+    out_format    -- format to use for result
+                     (default "vtt")
+    """
 
     video_meta: dict = eval(
         run(

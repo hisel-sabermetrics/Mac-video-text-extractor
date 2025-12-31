@@ -44,7 +44,7 @@ python3 main.py [options]
 | `--min-change` | optional | The minium change between 2 frames before a new frame is extracted. Accepted values are from 0-1. Defaults is 0.02. Use 0 to extract all frames | `python3 main.py video.mp4 --min-change 0.1` |
 | `--crop` | optional | The box to crop the video to. This value is passed to ffmpeg. The syntax is `width:height:x_pos:y_pos`. | `python3 main.py video.mp4 --crop in_w/2:in_h/2:in_w/4:in_h/4` |
 | `--lang` | optional | The languages used by the OCR. Defaults to None | `python3 main.py video.mp4 --lang en-US  de-DE` |
-| `--subtract-from-pre` | optional | Seconds to subtract from each cue. Defaults to 0. | `python3 main.py video.mp4 --subtract-from-pre 0.1` |
+| `--subtract-from-pre` | optional | Seconds to subtract before immediate cue. Defaults to 0. | `python3 main.py video.mp4 --subtract-from-pre 0.1` |
 | `--min-seg-len-for-subtract` | optional | The minimum length in seconds of each cue to apply `--subtract-from-pre`. Defaults to 0. | `python3 main.py video.mp4 --subtract-from-pre 0.1 --min-seg-len-for-subtract 0.15` |
 | `--version` | optional | The version to use. Version 2 is faster, version 1 is lighter on resources but very slow and cannot adjust output format. Defaults to 2. | `python3 main.py video.mp4 --format 1` |
 | `--format` | optional | The format used to save the output. Accepts `ass`, `srt`, `vtt`, and `webvtt`. Defaults to `vtt`.| `python3 main.py video.mp4 --format srt` |
@@ -87,7 +87,7 @@ Arguments:
 | `replace` | `str` | String to replace selected text from above | `` |
 | `scene` | `float` | Minimum changes between 2 frames to do a new OCR. The accepted range is 0-1 inclusive. Use 0 to force OCR on every frame | `0.02` |
 | `lyrics_file` | `TextIO` | A file opened as texts to match the extracted texts. Requirements is same as ``--lyrics`` from cli. | `None` |
-| `sub_from_prev` | `float` | Seconds to subtract from each cue. | `0` |
+| `sub_from_prev` | `float` | Seconds to subtract before each immediate cue. | `0` |
 | `min_to_sub` | `float` |  The minimum length in seconds of each cue to apply `sub_from_prev`. | `0` |
 | `crop` | `str` | The box to crop the video to. This value is passed to ffmpeg. The syntax is `width:height:x_pos:y_pos`. | `in_w:in_h:0:0` |
 | `lang` | `list[str]` | A list of languages used by the OCR. | `None` |
