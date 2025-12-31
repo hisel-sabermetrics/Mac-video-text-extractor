@@ -621,12 +621,13 @@ def video2vtt(
         else all_frame_timestamp(video_path_escaped)
     )
 
-    time_start: list[float, ...] = [
-        float(t) for t in findall(r"(?<=pts_time:)[0-9\.]++", seg_change)
-    ]
-    time_end: list[float, ...] = time_start[1:]
-    time_start.pop()
-    num_seg: int = len(time_end)
+    time_start: NDArray[float32] = array(
+        [float(t) for t in findall(r"(?<=pts_time:)[0-9\.]++", seg_change)],
+        float32,
+    )
+    time_end: NDArray[float32] = time_start[1:]
+    time_start = time_start[:-1]
+    num_seg: int = time_end.size
 
     width: int = video_meta["width"]
     height: int = video_meta["height"]
@@ -662,8 +663,6 @@ def video2vtt(
     all_frame_start_time: NDArray[float32] = all_frame_timestamp(
         video_path_escaped
     )
-    # Cast to NDArray
-    time_start: NDArray = array(time_start, float32)
     # Split time_start by keyframe
     timestamp_list: list[NDArray[float32]] = [
         time
@@ -726,9 +725,7 @@ def video2vtt(
 
     # Remove all empty cue
     print("Removing empty cue")
-    all_cue, time_start, time_end = remove_empty(
-        all_cue, time_start, array(time_end, dtype=float32)
-    )
+    all_cue, time_start, time_end = remove_empty(all_cue, time_start, time_end)
 
     # Apply lyric file
     if lyrics_file is not None:
