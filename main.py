@@ -1,5 +1,22 @@
 """
-Date: 19 Jun 2025
+My Python Script (MIT License)
+Copyright (c) 2025 Your Name
+
+This script uses the following third-party libraries:
+
+- OCRMac (MIT) https://github.com/straussmaximilian/ocrmac
+- Pillow (MIT) https://python-pillow.org
+- tqdm (MPL 2.0, unmodified) https://github.com/tqdm/tqdm
+- NumPy (BSD) https://numpy.org
+- Python Standard Library (PSF License)
+
+This script also requires the following CLI tool:
+
+- ffmpeg https://ffmpeg.org/ (for video/audio processing)
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files, to use, copy, modify, merge,
+publish, distribute, sublicense, and/or sell copies of the Software.
 """
 
 from argparse import ArgumentParser, FileType
