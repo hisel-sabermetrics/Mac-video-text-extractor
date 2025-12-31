@@ -57,7 +57,7 @@ def sec2str_time(sec: float) -> str:
 
 
 def video_to_frames(
-    path_escaped: str,
+    path: str,
     start_sec: float,
     height: int,
     width: int,
@@ -69,12 +69,22 @@ def video_to_frames(
     end_y: int | None = None,
 ) -> list[Image]:
     buffer: str = run(
-        f"ffmpeg -ss {start_sec} -i "
-        + path_escaped
-        + f" -frames:v {num_frame} -f rawvideo -pix_fmt rgb24 pipe:",
+        [
+            "ffmpeg",
+            "-ss",
+            str(start_sec),
+            "-i",
+            path,
+            "-frames:v",
+            str(num_frame),
+            "-f",
+            "rawvideo",
+            "-pix_fmt",
+            "rgb24",
+            "pipe:",
+        ],
         stdout=PIPE,
         stderr=DEVNULL,
-        shell=True,
     ).stdout
 
     cast_to_ndarray: NDArray = frombuffer(buffer, uint8)
@@ -134,7 +144,7 @@ def text_from_img(
 
 def extract_txt(
     start_sec: float,
-    video_path_escaped: str,
+    video_path: str,
     width: int,
     height: int,
     num_frame: int = 1,
@@ -147,7 +157,7 @@ def extract_txt(
 ) -> list[str, ...]:
     return text_from_img(
         video_to_frames(
-            video_path_escaped,
+            video_path,
             start_sec,
             height,
             width,
@@ -176,18 +186,27 @@ def pretty(txt_joined: str) -> str:
     return txt_joined
 
 
-def seg_from_scene(video_path_escaped: str, scene: float, crop: str) -> str:
-    return run(
-        "ffmpeg -i " + video_path_escaped + " -filter:v "
-        f'"crop={crop},'
-        "hue=s=0,"  # Turn greyscale
-        "maskfun=low=230:high=230:fill=0:sum=255,"  # Mask
-        f"select='gt(scene,{scene})',showinfo\" -f null -",
-        stdout=DEVNULL,
-        stderr=PIPE,
-        text=True,
-        shell=True,
-    ).stderr
+def seg_from_scene(video_path: str, scene: float, crop: str) -> str:
+    return (
+        run(
+            [
+                "ffmpeg",
+                "-i",
+                video_path,
+                "-filter:v",
+                f"crop={crop},"
+                "hue=s=0,"  # Turn greyscale
+                "maskfun=low=230:high=230:fill=0:sum=255,"  # Mask
+                f"select='gt(scene,{scene})',showinfo",
+                "-f",
+                "null",
+                "-",
+            ],
+            stdout=DEVNULL,
+            stderr=PIPE,
+            text=True,
+        ).stderr,
+    )
 
 
 def seg_from_key(video_path_escaped: str, crop) -> str:
@@ -202,52 +221,71 @@ def seg_from_key(video_path_escaped: str, crop) -> str:
     ).stderr
 
 
-def video_length(video_path_escaped: str) -> float:
+def video_length(video_path: str) -> float:
     return float(
         run(
-            "ffprobe -v error "
-            "-select_streams v:0 "
-            "-show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "
-            + video_path_escaped,
+            [
+                "ffprobe",
+                "-v",
+                "error",
+                "-select_streams",
+                "v:0",
+                "-show_entries",
+                "format=duration",
+                "-of",
+                "default=noprint_wrappers=1:nokey=1",
+                video_path,
+            ],
             stdout=PIPE,
             stderr=DEVNULL,
             text=True,
-            shell=True,
         ).stdout.strip("\n")
     )
 
 
-def all_frame_timestamp(video_path_escaped: str) -> NDArray[float32]:
+def all_frame_timestamp(video_path: str) -> NDArray[float32]:
     return array(
         findall(
             r"(?<=pts_time:)[0-9\.]++",
             run(
-                "ffmpeg -i "
-                + video_path_escaped
-                + " -filter:v showinfo -f null -",
+                [
+                    "ffmpeg",
+                    "-i",
+                    video_path,
+                    "-filter:v",
+                    "showinfo",
+                    "-f",
+                    "null",
+                    "-",
+                ],
                 stdout=DEVNULL,
                 stderr=PIPE,
                 text=True,
-                shell=True,
             ).stderr,
         ),
         dtype=float32,
     )
 
 
-def keyframe_timestamp(video_path_escaped: str) -> list[float]:
+def keyframe_timestamp(video_path: str) -> list[float]:
     return [
         float(t)
         for t in findall(
             r"(?<=pts_time:)[0-9\.]++",
             run(
-                "ffmpeg -i "
-                + video_path_escaped
-                + " -filter:v \"select='eq(key,1)',showinfo\" -f null -",
+                [
+                    "ffmpeg",
+                    "-i",
+                    video_path,
+                    "-filter:v",
+                    "select='eq(key,1)',showinfo",
+                    "-f",
+                    "null",
+                    "-",
+                ],
                 stdout=DEVNULL,
                 stderr=PIPE,
                 text=True,
-                shell=True,
             ).stderr,
         )
     ]
@@ -297,7 +335,7 @@ def merge_cue(
 
 
 _ALL_FRAME_START_TIME: Optional[str] = None
-_VIDEO_PATH_ESCAPED: Optional[str] = None
+_VIDEO_PATH: Optional[str] = None
 _WIDTH: Optional[int] = None
 _HEIGHT: Optional[int] = None
 _START_X: Optional[int] = None
@@ -309,7 +347,7 @@ _LANG: Optional[list[str] | None] = None
 
 def _init_worker(
     all_frame_start_time: str,
-    video_path_escaped: str,
+    video_path: str,
     width: int,
     height: int,
     start_x: int,
@@ -318,10 +356,10 @@ def _init_worker(
     end_y: int | None,
     lang: list[str] | None,
 ) -> None:
-    global _ALL_FRAME_START_TIME, _VIDEO_PATH_ESCAPED, _WIDTH, _HEIGHT
+    global _ALL_FRAME_START_TIME, _VIDEO_PATH, _WIDTH, _HEIGHT
     global _START_X, _START_Y, _END_X, _END_Y, _LANG
     _ALL_FRAME_START_TIME = all_frame_start_time
-    _VIDEO_PATH_ESCAPED = video_path_escaped
+    _VIDEO_PATH = video_path
     _WIDTH = width
     _HEIGHT = height
     _START_X = start_x
@@ -350,7 +388,7 @@ def _timestamps_to_text(
     # Get text
     return extract_txt(
         timestamps[0],
-        _VIDEO_PATH_ESCAPED,
+        _VIDEO_PATH,
         _WIDTH,
         _HEIGHT,
         num_frames,
@@ -435,7 +473,7 @@ def old_video2vtt(
     num_seg = inf
     while True:
         if scene != 0:
-            seg_change: str = seg_from_scene(video_path_escaped, scene, crop)
+            seg_change: str = seg_from_scene(video_path, scene, crop)
         else:
             scene = 0
             seg_change: str = seg_from_key(video_path_escaped, crop)
@@ -483,7 +521,7 @@ def old_video2vtt(
             this_cue: str = next(
                 extract_txt(
                     start,
-                    video_path_escaped,
+                    video_path,
                     width,
                     height,
                     start_x=start_x,
@@ -616,9 +654,9 @@ def video2vtt(
     )["streams"][0]
 
     seg_change: str = (
-        seg_from_scene(video_path_escaped, scene, crop)
+        seg_from_scene(video_path, scene, crop)
         if scene != 0
-        else all_frame_timestamp(video_path_escaped)
+        else all_frame_timestamp(video_path)
     )
 
     time_start: NDArray[float32] = array(
@@ -654,15 +692,13 @@ def video2vtt(
 
     print(f"Number of scene found: {num_seg}")
 
-    keyframe_start_time: list[float, ...] = keyframe_timestamp(
-        video_path_escaped
-    ) + [video_length(video_path_escaped) + 1]
+    keyframe_start_time: list[float, ...] = keyframe_timestamp(video_path) + [
+        video_length(video_path) + 1
+    ]
     if keyframe_start_time[0] != 0:
         keyframe_start_time = [0] + keyframe_start_time
 
-    all_frame_start_time: NDArray[float32] = all_frame_timestamp(
-        video_path_escaped
-    )
+    all_frame_start_time: NDArray[float32] = all_frame_timestamp(video_path)
     # Split time_start by keyframe
     timestamp_list: list[NDArray[float32]] = [
         time
@@ -684,7 +720,7 @@ def video2vtt(
         initializer=_init_worker,
         initargs=(
             all_frame_start_time,
-            video_path_escaped,
+            video_path,
             width,
             height,
             start_x,
@@ -696,7 +732,6 @@ def video2vtt(
     ) as pool:
         del (
             all_frame_start_time,
-            video_path_escaped,
             width,
             height,
             start_x,
