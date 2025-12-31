@@ -396,7 +396,9 @@ def _timestamps_to_text(
 
 
 def write_to_file(
-    video_path: str, cue_list: Iterable[Iterable[float, float, str]]
+    video_path: str,
+    cue_list: Iterable[Iterable[float, float, str]],
+    format: str = "vtt",
 ) -> None:
     # Check if write is allowed
     if not _WRITE_TO_FILE:
@@ -408,17 +410,34 @@ def write_to_file(
         for cue in cue_list
     )
     path_before_i: str = sub(r"\.[^\.]+$", "", expanduser(video_path))
-    if not exists(path_before_i + ".vtt"):
-        open(
-            path_before_i + ".vtt",
-            "x",
-        ).write(file_vtt)
+    path_used: str = path_before_i + "." + format
+    # Check if exists
+    if exists(path_used):
+        for i in count(2):
+            path_used = path_before_i + f"-{i}." + format
+            if exists(path_used):
+                continue
+            break
+
+    if format != "vtt" and format != "webvtt":
+        temp_path: str = path_used + "-1.vtt"
+        if exists(temp_path):
+            for i in count(2):
+                temp_path = path_before_i + f"-{i}.vtt"
+                if exists(temp_path):
+                    continue
+                break
+        open(temp_path, "x").write(file_vtt)
+        # Convert format
+        run(
+            ["ffmpeg", "-i", temp_path, path_used],
+            stdout=DEVNULL,
+            stderr=DEVNULL,
+        ).stdout
+        run(["rm", path_used], stdout=DEVNULL, stderr=DEVNULL).stdout
         return
-    for i in count(2):
-        if exists(path_before_i + f"-{i}.vtt"):
-            continue
-        open(path_before_i + f"-{i}.vtt", "x").write(file_vtt)
-        return
+    # No conversion
+    open(path_used, "x").write(file_vtt)
 
 
 def old_video2vtt(
@@ -623,6 +642,7 @@ def video2vtt(
     crop: str = "in_w:in_h:0:0",
     lang: list[str] | None = None,
     write_file: bool = True,
+    out_format: str = "vtt",
 ) -> None:
 
     video_meta: dict = eval(
@@ -872,7 +892,7 @@ def video2vtt(
     # Write to file
     if write_file:
         print("Writing to file")
-        write_to_file(video_path, cue_list)
+        write_to_file(video_path, cue_list, out_format)
         _WRITE_TO_FILE = False
 
 
@@ -908,6 +928,14 @@ if __name__ == "__main__":
         choices=(1, 2),
         required=False,
         default=[2],
+    )
+    parser.add_argument(
+        "--format",
+        nargs=1,
+        type=str,
+        choices=("ass", "srt", "vtt", "webvtt"),
+        required=False,
+        default="vtt",
     )
     args = parser.parse_args()
     if len(args.pattern) == 1:
@@ -945,4 +973,5 @@ if __name__ == "__main__":
                     min_to_sub=args.min_seg_len_for_subtract,
                     crop=args.crop,
                     lang=args.lang,
+                    out_format=args.format,
                 )
