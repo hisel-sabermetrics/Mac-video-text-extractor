@@ -927,9 +927,9 @@ def video2vtt(
             time_end - sub_from_prev,
             time_end,
         )
-        cue_list: Tuple[Tuple[float, float, str]] = tuple(
-            zip(time_start, time_end, all_cue)
-        )
+    cue_list: Tuple[Tuple[float, float, str]] = tuple(
+        zip(time_start, time_end, all_cue)
+    )
 
     # Write to file
     if write_file:
