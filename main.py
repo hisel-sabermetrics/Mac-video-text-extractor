@@ -504,8 +504,8 @@ def old_video2vtt(
         )
         time_end: list[float, ...] = time_start[1:]
         time_start.pop()
-        num_seg: int = len(time_end)
-        if scene != 0 and num_seg > int(video_meta["nb_read_frames"]) * 0.8:
+        num_frame: int = len(time_end)
+        if scene != 0 and num_frame > int(video_meta["nb_read_frames"]) * 0.8:
             scene = 0
         else:
             break
@@ -714,7 +714,7 @@ def video2vtt(
     )
     time_end: NDArray[float32] = time_start[1:]
     time_start = time_start[:-1]
-    num_seg: int = time_end.size
+    num_frame: int = time_end.size
 
     width: int = video_meta["width"]
     height: int = video_meta["height"]
@@ -739,7 +739,7 @@ def video2vtt(
         else int(crop_param[1]) + start_y
     )
 
-    print(f"Number of scene found: {num_seg}")
+    print(f"Number of scene found: {num_frame}")
 
     keyframe_start_time: list[float, ...] = keyframe_timestamp(video_path) + [
         video_length(video_path) + 1
@@ -789,7 +789,7 @@ def video2vtt(
             end_y,
             lang,
         )
-        with tqdm(total=num_seg) as pbar:
+        with tqdm(total=num_frame) as pbar:
             workers: list[Future[tuple[str]]] = [
                 pool.submit(_timestamps_to_text, timestamps)
                 for timestamps in timestamp_list
