@@ -21,7 +21,7 @@ publish, distribute, sublicense, and/or sell copies of the Software.
 
 from argparse import ArgumentParser, FileType
 from atexit import register
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator
 from concurrent.futures import Future, ProcessPoolExecutor, as_completed, wait
 from difflib import get_close_matches
 from itertools import count, repeat
@@ -129,31 +129,11 @@ def text_from_img(
     lang: list[str, ...] | None = None,
     workers: int = 3,
 ) -> list[str, ...]:
-    task_len: int = len(imgs)
-    pool = ProcessPoolExecutor(max_workers=min(task_len, workers))
-    results: list[Future[str]] = [
-        pool.submit(text_from_1_img, img, lang) for img in imgs
-    ]
-    tasks_to_check: list[Future[str]] = results
-    timeout: list[Future[str]] = []
-    i_to_check: list[int] = list(range(task_len))
-    i_timeout: list[int] = []
-    texts: list[str | None] = [None] * task_len
-    while tasks_to_check:
-        for result in as_completed(tasks_to_check, 5):
-            i: int = i_to_check[tasks_to_check.index(result)]
-            # No timeout
-            if result.exception() is None:
-                texts[i] = result.result()
-                continue
-            # Restart task and track
-            timeout.append(pool.submit(text_from_1_img, imgs[i], lang))
-            i_timeout.append(i)
-        # Only check timed out tasks
-        tasks_to_check = timeout
-        i_to_check = i_timeout
-
-    return texts
+    return list(
+        ProcessPoolExecutor(workers).map(
+            text_from_1_img, imgs, repeat(lang), chunksize=1
+        )
+    )
 
 
 def extract_txt(
@@ -168,7 +148,7 @@ def extract_txt(
     end_x: int | None = None,
     end_y: int | None = None,
     lang: list[str] | None = None,
-) -> list[str, ...]:
+) -> Iterator[str, ...]:
     return text_from_img(
         video_to_frames(
             video_path,
@@ -382,7 +362,7 @@ def _init_worker(
 
 def _timestamps_to_text(
     timestamps: NDArray[float32],
-) -> list[str]:
+) -> Iterator[str]:
     # Get index of frames
     index: NDArray[intp] = flatnonzero(
         isin(
@@ -790,22 +770,27 @@ def video2vtt(
             lang,
         )
         with tqdm(total=num_frame) as pbar:
-            workers: list[Future[tuple[str]]] = [
+            workers: list[Future[Iterator[str]]] = [
                 pool.submit(_timestamps_to_text, timestamps)
                 for timestamps in timestamp_list
             ]
+            results: list[str | None] = [None] * len(workers)
             del timestamp_list
             # Update pbar
             for task in as_completed(workers):
-                pbar.update(len(task.result()))
+                i = workers.index(task)
+                results[i] = tuple(task.result())
+                pbar.update(len(results[i]))
+            del workers
 
         # Join all output
         print("Collecting")
         all_cue: NDArray[str] = concatenate(
-            [result.result() for result in workers],
+            results,
             dtype=object,
             casting="safe",
         )
+        del results
 
     # Apply replace
     if remove != "":
