@@ -28,7 +28,7 @@ from itertools import count, repeat
 from os.path import exists, expanduser
 from re import escape, findall, split, sub
 from subprocess import DEVNULL, PIPE, run
-from typing import Any, Optional, TextIO, Tuple
+from typing import Any, TextIO, Tuple
 
 from numpy import (
     append,
@@ -345,15 +345,15 @@ def merge_cue(
     return time_start[keep], time_end[keep], all_cue[keep]
 
 
-_ALL_FRAME_START_TIME: Optional[str] = None
-_VIDEO_PATH: Optional[str] = None
-_WIDTH: Optional[int] = None
-_HEIGHT: Optional[int] = None
-_START_X: Optional[int] = None
-_START_Y: Optional[int] = None
-_END_X: Optional[int | None] = None
-_END_Y: Optional[int | None] = None
-_LANG: Optional[list[str] | None] = None
+_ALL_FRAME_START_TIME: str | None = None
+_VIDEO_PATH: str | None = None
+_WIDTH: int | None = None
+_HEIGHT: int | None = None
+_START_X: int | None = None
+_START_Y: int | None = None
+_END_X: int | None = None
+_END_Y: int | None = None
+_LANG: list[str] | None = None
 
 
 def _init_worker(
